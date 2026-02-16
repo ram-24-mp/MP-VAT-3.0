@@ -1,0 +1,94 @@
+//MP-VAT (Microplastics Visual Analysis Tool) version 2.0
+//Created by J.C.Prata, J. R. Alves, V. Reis, J. Matos, J.P.da Costa, A.Duarte, T.Rocha-Santos 2019
+
+macro "MPVAT Action Tool - C369D32D72D92Da2Db2Dc2D33D43D63D73D93Dd3D34D54D74D94Dd4D35D55D75D95Da5Db5Dc5D36D76D96D37D77D97D3aD5aD7aD8aD9aDbaDcaDdaD3bD5bD7bD9bDcbD3cD5cD7cD8cD9cDccD3dD5dD7dD9dDcdD4eD7eD9eDce"{
+
+//Function Red
+function red() {
+imageName=getTitle();
+setBatchMode(true);
+run("Split Channels");
+imageCalculator("Subtract create", imageName + " (red)", imageName + " (green)");
+
+selectWindow(imageName + " (red)");
+close();
+selectWindow(imageName + " (blue)");
+close();
+selectWindow(imageName + " (green)");
+close();
+
+selectWindow("Result of " + imageName + " (red)");
+setBatchMode("show");
+}
+
+
+//Function MP-VAT v1.0
+function mpvat() {
+
+//Color inversion, 8-bit conversion and automatic threshold
+run("Invert");
+run("8-bit");
+setThreshold(0,221);
+getThreshold(lower,upper);
+setOption("BlackBackground", false);
+run("Convert to Mask");
+run("Set Measurements...", "area shape feret's display redirect=None decimal=3");
+
+//title
+title = getTitle();
+setBatchMode(true);
+mpshape = newArray ("Fibers", "Fragments", "Particles");
+for (i = 0; i < mpshape.length; i++) {
+    selectWindow(title);
+    run("Duplicate...", " ");
+    rename(mpshape[i]);
+}
+run("Tile");
+
+//Analyze Fibers
+selectWindow(mpshape[0]);
+run("Analyze Particles...", "size=3-1000000 pixel circularity=0.0-0.3 display");
+
+//Analyze Fragments
+selectWindow(mpshape[1]);
+run("Analyze Particles...", "size=3-1000000 pixel circularity=0.3-0.6 display");
+
+//Analyze Particles
+selectWindow(mpshape[2]);
+run("Watershed");
+run("Analyze Particles...", "size=3-1000000 pixel circularity=0.6-1.0 display");
+
+//Get results and save to excel
+for (i = 0; i < mpshape.length; i++) {
+    close(mpshape[i]);
+}
+run("Original Scale");
+
+// Save results and particle mask
+dir = File.directory;
+name = File.nameWithoutExtension;
+
+// Save Results table
+saveAs("results", dir + name + "_results.xls");
+
+// Save particle mask image (the thresholded/mask image)
+selectWindow(title); // 'title' was set at the start of mpvat()
+saveAs("Tiff", dir + name + "_particle_mask.tif");
+close(title);                 // close the image window
+}
+
+//If there is selection, delete unselected part
+detsel = selectionType();
+if (detsel==-1){
+red();
+mpvat();
+}
+else if (detsel>=0){
+roiManager("Add");
+setBackgroundColor(255, 255, 255);
+run("Clear Outside");
+roiManager("Delete");
+red();
+mpvat();
+}
+}
